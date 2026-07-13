@@ -6,6 +6,7 @@ import asyncio
 import uuid
 from collections.abc import AsyncIterator
 
+from pydantic_ai.exceptions import UsageLimitExceeded
 from supabase import AsyncClient
 
 from app.assistant.agent import run_document_agent
@@ -24,6 +25,11 @@ from app.retrieval.retriever import DocumentRetriever
 from app.schemas.chat import UIMessage
 
 MAX_VALIDATION_ATTEMPTS = 2
+AGENT_NO_EVIDENCE_MESSAGE = (
+    "I could not find enough evidence in the available source passages to answer "
+    "this question confidently. Try a narrower question, fewer filters, or a "
+    "company/form combination that exists in your ingested corpus."
+)
 
 
 async def _yield_status_updates(
@@ -99,8 +105,14 @@ async def run_turn(
             ):
                 yield event
             return
+        except UsageLimitExceeded:
+            async for event in stream_error(AGENT_NO_EVIDENCE_MESSAGE):
+                yield event
+            return
         except Exception as exc:
-            async for event in stream_error(f"Assistant run failed: {exc}"):
+            async for event in stream_error(
+                f"{AGENT_NO_EVIDENCE_MESSAGE} (details: {exc})"
+            ):
                 yield event
             return
 
