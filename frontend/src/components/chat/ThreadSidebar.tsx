@@ -53,6 +53,9 @@ export function ThreadSidebar() {
       const id = await createNewThread()
       navigate(`/chats/${id}`)
       if (isMobile) setOpenMobile(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not create conversation.'
+      toast.error(message)
     } finally {
       setIsCreating(false)
     }

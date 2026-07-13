@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,6 +25,7 @@ class Settings(BaseSettings):
     openai_chat_model: str = "gpt-5.5"
     openai_grounding_model: str = "gpt-4.1-mini"
     openai_agent_request_limit: int = 20
+    openai_agent_timeout_seconds: int = 45
     openai_agent_temperature: float = 0.0
 
     retrieval_candidate_k: int = 50
@@ -37,7 +39,7 @@ class Settings(BaseSettings):
     retrieval_fts_keyword_fast_path_tokens: int = 5
 
     # Comma-separated in .env; use `cors_origins` for the parsed list.
-    allowed_origins: str = "http://localhost:5173"
+    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     @computed_field
     @property
@@ -53,11 +55,35 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def cors_origins(self) -> list[str]:
-        return [
+        configured = [
             origin.strip()
             for origin in self.allowed_origins.split(",")
             if origin.strip()
         ]
+
+        expanded: list[str] = []
+        for origin in configured:
+            if origin not in expanded:
+                expanded.append(origin)
+
+            parsed = urlsplit(origin)
+            hostname = parsed.hostname
+            if not hostname:
+                continue
+
+            if hostname == "localhost":
+                alias_host = "127.0.0.1"
+            elif hostname == "127.0.0.1":
+                alias_host = "localhost"
+            else:
+                continue
+
+            port_suffix = f":{parsed.port}" if parsed.port else ""
+            alias_origin = f"{parsed.scheme}://{alias_host}{port_suffix}"
+            if alias_origin not in expanded:
+                expanded.append(alias_origin)
+
+        return expanded
 
 
 settings = Settings()

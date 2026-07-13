@@ -91,14 +91,17 @@ def full_text_search(
     filters: SearchFilters | None = None,
 ) -> list[RankedChunkHit]:
     fts_config = settings.retrieval_fts_config
+    # Compute tsvector at query time so retrieval works even before a generated
+    # search_vector column/index is added by migration.
+    text_vector = f"to_tsvector('{fts_config}', coalesce(dc.text, ''))"
     filter_clause = _build_filters(filters)
     sql = f"""
         SELECT dc.id,
-               ts_rank_cd(dc.search_vector, query) AS score
+               ts_rank_cd({text_vector}, query) AS score
         FROM document_chunks dc
         JOIN source_documents sd ON sd.id = dc.document_id,
              plainto_tsquery('{fts_config}', :query_text) query
-        WHERE dc.search_vector @@ query
+        WHERE {text_vector} @@ query
         {filter_clause.sql}
         ORDER BY score DESC
         LIMIT :limit
@@ -137,13 +140,14 @@ def _semantic_sql_template(filter_clause: _FilterClause) -> str:
 
 
 def _fts_sql_template(fts_config: str, filter_clause: _FilterClause) -> str:
+    text_vector = f"to_tsvector('{fts_config}', coalesce(dc.text, ''))"
     return f"""
         SELECT dc.id,
-               ts_rank_cd(dc.search_vector, query) AS score
+               ts_rank_cd({text_vector}, query) AS score
         FROM document_chunks dc
         JOIN source_documents sd ON sd.id = dc.document_id,
              plainto_tsquery('{fts_config}', :query_text) query
-        WHERE dc.search_vector @@ query
+        WHERE {text_vector} @@ query
         {filter_clause.sql}
         ORDER BY score DESC
         LIMIT :limit

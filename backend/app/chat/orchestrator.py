@@ -18,6 +18,7 @@ from app.chat.streaming import (
     stream_error,
     stream_status,
 )
+from app.config import settings
 from app.grounding.validator import GroundingValidator, prune_unreferenced_citations
 from app.retrieval.retriever import DocumentRetriever
 from app.schemas.chat import UIMessage
@@ -86,7 +87,18 @@ async def run_turn(
             yield event
 
         try:
-            grounded = await agent_task
+            grounded = await asyncio.wait_for(
+                agent_task,
+                timeout=settings.openai_agent_timeout_seconds,
+            )
+        except TimeoutError:
+            agent_task.cancel()
+            async for event in stream_error(
+                "Assistant timed out while reading source passages. "
+                "Try a narrower question or fewer filters."
+            ):
+                yield event
+            return
         except Exception as exc:
             async for event in stream_error(f"Assistant run failed: {exc}"):
                 yield event

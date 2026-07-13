@@ -74,6 +74,8 @@ async def stream_grounded_answer(
 
 async def stream_error(error_text: str) -> AsyncIterator[str]:
     yield _sse_event({"type": "error", "errorText": error_text})
+    # Ensure the client stream transitions out of streaming state after errors.
+    yield _sse_event({"type": "finish"})
 
 
 async def stream_grounded_turn_and_persist(

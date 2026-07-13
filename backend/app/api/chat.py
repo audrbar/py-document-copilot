@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 
-from app.auth.dependencies import CurrentUser, get_access_token, get_current_user
+from app.auth.dependencies import CurrentUser, get_current_user
 from app.chat.messages import extract_last_user_message
 from app.chat.orchestrator import run_turn
 from app.database.chats import (
@@ -22,7 +22,7 @@ from app.database.chats import (
 from app.database.documents import get_chunk_context
 from app.database.models import DocumentChunk
 from app.database.session import get_session
-from app.database.supabase import create_user_client
+from app.database.supabase import get_service_role_client
 from app.database.users import ensure_user
 from app.retrieval.retriever import DocumentRetriever
 from app.schemas.chat import (
@@ -110,10 +110,9 @@ def load_citation_context(
 @router.get("/threads")
 async def get_threads(
     user: CurrentUser = Depends(get_current_user),
-    access_token: str = Depends(get_access_token),
 ) -> ThreadListResponse:
     await ensure_user(user)
-    client = await create_user_client(access_token)
+    client = await get_service_role_client()
     threads = await list_threads(client, user)
     return ThreadListResponse(threads=threads)
 
@@ -122,10 +121,9 @@ async def get_threads(
 async def post_thread(
     body: CreateThreadRequest,
     user: CurrentUser = Depends(get_current_user),
-    access_token: str = Depends(get_access_token),
 ) -> ThreadResponse:
     await ensure_user(user)
-    client = await create_user_client(access_token)
+    client = await get_service_role_client()
     return await create_thread(client, user, title=body.title)
 
 
@@ -133,10 +131,9 @@ async def post_thread(
 async def get_thread_messages(
     thread_id: uuid.UUID,
     user: CurrentUser = Depends(get_current_user),
-    access_token: str = Depends(get_access_token),
 ) -> MessageHistoryResponse:
     await require_thread_access(thread_id, user)
-    client = await create_user_client(access_token)
+    client = await get_service_role_client()
     messages = await load_messages(client, thread_id)
     return MessageHistoryResponse(messages=messages)
 
@@ -160,10 +157,9 @@ async def get_citation_context(
 async def delete_thread_route(
     thread_id: uuid.UUID,
     user: CurrentUser = Depends(get_current_user),
-    access_token: str = Depends(get_access_token),
 ) -> None:
     await require_thread_access(thread_id, user)
-    client = await create_user_client(access_token)
+    client = await get_service_role_client()
     await delete_thread(client, thread_id)
 
 
@@ -171,12 +167,11 @@ async def delete_thread_route(
 async def post_stream(
     body: StreamRequest,
     user: CurrentUser = Depends(get_current_user),
-    access_token: str = Depends(get_access_token),
 ) -> StreamingResponse:
     await ensure_user(user)
     thread = await require_thread_access(body.thread_id, user)
     user_message = extract_last_user_message(body.messages)
-    client = await create_user_client(access_token)
+    client = await get_service_role_client()
 
     retriever = DocumentRetriever()
     return StreamingResponse(

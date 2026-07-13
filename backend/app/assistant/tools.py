@@ -137,7 +137,19 @@ async def _run_tool(
 ):
     emit_tool_start(deps, name, detail)
     started = time.perf_counter()
-    result = await asyncio.to_thread(functools.partial(fn, *args, **kwargs))
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(functools.partial(fn, *args, **kwargs)),
+            timeout=settings.openai_agent_timeout_seconds,
+        )
+    except TimeoutError as exc:
+        report_progress(
+            f"tool {name} timed out after {settings.openai_agent_timeout_seconds}s"
+        )
+        raise RuntimeError(
+            f"Tool {name} timed out while reading source passages."
+        ) from exc
+
     if isinstance(result, list):
         summary = f"{len(result)} results"
     elif result is None:

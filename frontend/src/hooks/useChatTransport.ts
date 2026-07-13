@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { DefaultChatTransport } from 'ai'
+import type { UIMessage } from 'ai'
 
 import { getAccessToken } from '@/lib/api'
 import { isStatusPart, type PipelineStatus } from '@/lib/citations'
@@ -44,6 +45,13 @@ async function consumeStatusStream(
     }
 }
 
+function sanitizeMessagesForApi(messages: UIMessage[]): UIMessage[] {
+    return messages.map((message) => ({
+        ...message,
+        parts: message.parts.filter((part) => part.type !== 'data-status'),
+    }))
+}
+
 export function useChatTransport(
     threadId: string,
     onStatus?: (status: PipelineStatus) => void,
@@ -57,7 +65,7 @@ export function useChatTransport(
                     return token ? { Authorization: `Bearer ${token}` } : {}
                 },
                 prepareSendMessagesRequest: ({ messages }) => ({
-                    body: { threadId, messages },
+                    body: { threadId, messages: sanitizeMessagesForApi(messages) },
                 }),
                 fetch: async (input, init) => {
                     const response = await fetch(input, init)

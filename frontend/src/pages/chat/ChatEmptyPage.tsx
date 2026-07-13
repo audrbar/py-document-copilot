@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { ChatError } from '@/components/chat/ChatError'
+import { ChatInput } from '@/components/chat/ChatInput'
 import { LogoMark } from '@/components/Logo'
 import { PromptSuggestion } from '@/components/ui/prompt-suggestion'
 import { useThreads } from '@/hooks/useThreads'
@@ -10,20 +12,24 @@ export function ChatEmptyPage() {
   const navigate = useNavigate()
   const { createNewThread } = useThreads()
   const [isStarting, setIsStarting] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
 
   async function startConversation(prompt?: string) {
     if (isStarting) return
     setIsStarting(true)
+    setError(null)
     try {
       const id = await createNewThread()
       navigate(`/chats/${id}`, prompt ? { state: { initialPrompt: prompt } } : undefined)
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Could not start a conversation.'))
     } finally {
       setIsStarting(false)
     }
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-8 p-6">
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
       <div className="flex flex-col items-center gap-4 text-center">
         <LogoMark className="size-12" />
         <div className="space-y-1.5">
@@ -36,6 +42,23 @@ export function ChatEmptyPage() {
           </p>
         </div>
       </div>
+
+      <div className="w-full max-w-3xl">
+        {error ? (
+          <div className="mx-auto w-full max-w-3xl px-4 pb-2">
+            <ChatError error={error} />
+          </div>
+        ) : null}
+        <ChatInput
+          status={isStarting ? 'submitted' : 'ready'}
+          onSend={(text) => void startConversation(text)}
+          onStop={() => {
+            // Nothing to cancel while creating the thread.
+          }}
+        />
+      </div>
+
+      <p className="text-xs text-muted-foreground">Or start with a suggested prompt:</p>
 
       <div className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
         {EXAMPLE_QUESTIONS.map((question) => (
