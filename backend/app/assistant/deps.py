@@ -35,6 +35,7 @@ class DocumentAgentDeps:
     thread_id: UUID
     user_id: UUID
     on_status: StatusCallback | None = None
+    empty_search_count: int = 0
 
     def emit_status(self, stage: str, message: str) -> None:
         if self.on_status is not None:

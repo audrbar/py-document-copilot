@@ -191,6 +191,21 @@ async def search_filings(
         form=form,
         fiscal_years=fiscal_years,
     )
+    if not passages:
+        ctx.deps.empty_search_count += 1
+        if ctx.deps.empty_search_count >= 3:
+            return (
+                "No matching passages found in the filing corpus after multiple searches. "
+                "Stop calling tools and return a final response with "
+                "insufficient_evidence=true and an empty citations list."
+            )
+        return (
+            "No matching passages found in the filing corpus for this search. "
+            "Try one broader search without extra filters, then stop and return "
+            "insufficient_evidence=true if still no passages are found."
+        )
+
+    ctx.deps.empty_search_count = 0
     ctx.deps.registry.register_many(passages)
     return format_passages_for_agent(passages)
 
