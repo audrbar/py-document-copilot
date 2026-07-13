@@ -28,43 +28,61 @@ CLEAR_OUTPUT_DIR = False
 SKIP_EXISTING = True
 
 
+def resolve_input_dir() -> Path:
+    default_dir = INPUT_DIR
+    acts_dir = Path(__file__).resolve().parent / "downloads_acts"
+
+    if (default_dir / "manifest.json").is_file():
+        return default_dir
+    if (acts_dir / "manifest.json").is_file():
+        return acts_dir
+
+    return default_dir
+
+
 def convert_downloads_to_markdown() -> dict:
-    manifest_path = INPUT_DIR / "manifest.json"
+    input_dir = resolve_input_dir()
+    manifest_path = input_dir / "manifest.json"
     if not manifest_path.is_file():
         raise FileNotFoundError(
-            f"Missing {manifest_path}. Run `uv run data/download.py` first."
+            f"Missing {manifest_path}. Run `uv run data/download.py` or `uv run data/downloadAct.py` first. "
+            "If you are in the data folder, use `uv run convert_to_markdown.py`."
         )
 
     source_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    filings = source_manifest.get("filings", [])
+    filings = source_manifest.get("filings", []) or source_manifest.get("acts", [])
     if not filings:
-        raise ValueError(f"No filings listed in {manifest_path}")
+        raise ValueError(f"No records listed in {manifest_path}")
 
     if CLEAR_OUTPUT_DIR and OUTPUT_DIR.exists():
         shutil.rmtree(OUTPUT_DIR)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     converter = DocumentConverter()
+    source = source_manifest.get("source", "")
+    use_sec_tables = source.upper().startswith("SEC")
     manifest = {
-        "source": source_manifest.get("source", "SEC EDGAR"),
+        "source": source_manifest.get("source", "unknown"),
         "converted_at_utc": datetime.now(UTC).isoformat(),
-        "form": source_manifest.get("form", "10-K"),
+        "form": source_manifest.get("form", "unknown"),
         "converted_count": 0,
         "filings": [],
     }
 
     for filing in filings:
-        html_relative = filing["local_path"]
-        html_path = INPUT_DIR / html_relative
-        if not html_path.is_file():
-            raise FileNotFoundError(f"Missing HTML file: {html_path}")
+        source_relative = filing["local_path"]
+        source_path = input_dir / source_relative
+        if not source_path.is_file():
+            raise FileNotFoundError(f"Missing source file: {source_path}")
 
-        md_relative = str(Path(html_relative).with_suffix(".md"))
+        md_relative = str(Path(source_relative).with_suffix(".md"))
         md_path = OUTPUT_DIR / md_relative
         md_path.parent.mkdir(parents=True, exist_ok=True)
         tables_json_path = md_path.with_suffix(".tables.json")
-        html = html_path.read_text(encoding="utf-8")
-        tables = extract_sec_tables(html)
+        tables = []
+        if use_sec_tables and source_path.suffix.lower() in {".html", ".htm"}:
+            source_text = source_path.read_text(encoding="utf-8")
+            tables = extract_sec_tables(source_text)
 
         if SKIP_EXISTING and md_path.exists():
             print(f"Skipping existing {md_relative}")
@@ -81,8 +99,8 @@ def convert_downloads_to_markdown() -> dict:
                     encoding="utf-8",
                 )
         else:
-            print(f"Converting {html_relative}...")
-            result = converter.convert(html_path)
+            print(f"Converting {source_relative}...")
+            result = converter.convert(source_path)
             markdown = result.document.export_to_markdown()
             if tables:
                 markdown = (
@@ -100,7 +118,7 @@ def convert_downloads_to_markdown() -> dict:
 
         manifest_filing = {
             **filing,
-            "html_local_path": html_relative,
+            "source_local_path": source_relative,
             "local_path": md_relative,
         }
         if tables_json_path.exists():
@@ -120,7 +138,8 @@ def convert_downloads_to_markdown() -> dict:
 
 if __name__ == "__main__":
     result = convert_downloads_to_markdown()
+    input_dir = resolve_input_dir()
     print(
-        f"Converted {result['converted_count']} filing(s) from {INPUT_DIR} to {OUTPUT_DIR}"
+        f"Converted {result['converted_count']} filing(s) from {input_dir} to {OUTPUT_DIR}"
     )
     print(f"Manifest: {OUTPUT_DIR / 'manifest.json'}")

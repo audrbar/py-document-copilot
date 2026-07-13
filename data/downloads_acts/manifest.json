@@ -1,0 +1,22 @@
+{
+  "source": "E-TAR",
+  "generated_at_utc": "2026-07-13T16:52:10.597153+00:00",
+  "form": "LEGAL-ACT",
+  "downloaded_count": 2,
+  "failed_count": 0,
+  "filings": [
+    {
+      "legal_act_id": "10b83000a53b11e8acb39f2e6db7935b",
+      "source_url": "https://www.e-tar.lt/rs/actualedition/10b83000a53b11e8acb39f2e6db7935b/LgeMAqLLCg/format/MSO2010_DOCX/",
+      "asr_source_url": "https://www.e-tar.lt/portal/lt/legalAct/10b83000a53b11e8acb39f2e6db7935b/asr",
+      "local_path": "acts/10b83000a53b11e8acb39f2e6db7935b.docx"
+    },
+    {
+      "legal_act_id": "TAR.F4CA26A706AF",
+      "source_url": "https://www.e-tar.lt/rs/actualedition/TAR.F4CA26A706AF/slEElGPune/format/MSO2010_DOCX/",
+      "asr_source_url": "https://www.e-tar.lt/portal/lt/legalAct/TAR.F4CA26A706AF/asr",
+      "local_path": "acts/TAR.F4CA26A706AF.docx"
+    }
+  ],
+  "failures": []
+}

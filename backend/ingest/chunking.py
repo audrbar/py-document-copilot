@@ -26,6 +26,7 @@ from ingest.sec_tables import ExtractedTable, TableRow, extract_sec_tables
 
 CHUNK_MAX_TOKENS = 512
 DOWNLOADS_DIR = Path(__file__).resolve().parents[2] / "data" / "downloads"
+DOWNLOADS_ACTS_DIR = Path(__file__).resolve().parents[2] / "data" / "downloads_acts"
 MANIFEST_PATH = (
     Path(__file__).resolve().parents[2] / "data" / "markdown" / "manifest.json"
 )
@@ -71,10 +72,22 @@ def load_manifest_html_paths() -> dict[str, str]:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     paths: dict[str, str] = {}
     for filing in manifest.get("filings", []):
-        accession = filing["accession_number"]
-        html_path = filing.get("html_local_path")
+        accession = (
+            filing.get("accession_number")
+            or filing.get("legal_act_id")
+            or Path(filing.get("local_path", "")).stem
+        )
+        if not accession:
+            raise ValueError("Manifest record is missing accession identifier")
+        html_path = filing.get("source_local_path") or filing.get("html_local_path")
         if not html_path:
-            html_path = str(Path(filing["local_path"]).with_suffix(".htm"))
+            local_path = Path(filing["local_path"])
+            candidate_html = str(local_path.with_suffix(".html"))
+            candidate_htm = str(local_path.with_suffix(".htm"))
+            if (DOWNLOADS_DIR / candidate_html).is_file():
+                html_path = candidate_html
+            else:
+                html_path = candidate_htm
         paths[accession] = html_path
     return paths
 
@@ -83,10 +96,22 @@ def html_path_for_accession(accession_number: str) -> Path:
     paths = load_manifest_html_paths()
     if accession_number not in paths:
         raise KeyError(f"Accession {accession_number} not found in {MANIFEST_PATH}")
-    html_path = DOWNLOADS_DIR / paths[accession_number]
-    if not html_path.is_file():
-        raise FileNotFoundError(f"Missing HTML file: {html_path}")
-    return html_path
+    source_path = _resolve_source_path(paths[accession_number])
+    if not source_path.is_file():
+        raise FileNotFoundError(f"Missing source file: {source_path}")
+    return source_path
+
+
+def _resolve_source_path(relative_path: str) -> Path:
+    primary = DOWNLOADS_DIR / relative_path
+    if primary.is_file():
+        return primary
+
+    secondary = DOWNLOADS_ACTS_DIR / relative_path
+    if secondary.is_file():
+        return secondary
+
+    return primary
 
 
 def build_tokenizer(max_tokens: int = CHUNK_MAX_TOKENS) -> PatchedOpenAITokenizer:
@@ -177,10 +202,13 @@ def chunk_document(
     *,
     max_chunks: int | None = None,
 ) -> list[ChunkRecord]:
-    html = html_path.read_text(encoding="utf-8")
+    source_suffix = html_path.suffix.lower()
+    html = None
+    if source_suffix in {".html", ".htm"}:
+        html = html_path.read_text(encoding="utf-8")
     doc = convert_html_to_document(html_path)
     chunker = build_hybrid_chunker()
-    tables = extract_sec_tables(html)
+    tables = extract_sec_tables(html) if html is not None else []
     used_table_indexes: set[int] = set()
     records: list[ChunkRecord] = []
 
@@ -370,4 +398,4 @@ def chunk_document_hierarchical(html_path: Path) -> list[str]:
 
 def iter_all_html_paths() -> Iterator[tuple[str, Path]]:
     for accession, relative_path in load_manifest_html_paths().items():
-        yield accession, DOWNLOADS_DIR / relative_path
+        yield accession, _resolve_source_path(relative_path)

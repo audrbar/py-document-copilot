@@ -172,4 +172,4 @@ uv run python -m ingest.chunk_and_embed --accession 0000000000-00-000000 --force
 
 ## Inspiration
 
-Project inspired by [Dave Ebbelaar project](https://github.com/daveebbelaar/document-copilot).
+Project inspired by [Dave Ebbelaar project](https://github.com/daveebbelaar/document-copilot) and adapted to different use case.
